@@ -23,7 +23,7 @@ public class Test {
             System.out.println(path);
             System.out.println(path2);
 
-            //相对当前路径
+            //.class相对当前路径
             InputStream in = this.getClass().getResourceAsStream("spring.properties");
             //相对类路径
             InputStream in2 = this.getClass().getClassLoader().getResourceAsStream("com/zqj/boot/pattern/props/spring.properties");
