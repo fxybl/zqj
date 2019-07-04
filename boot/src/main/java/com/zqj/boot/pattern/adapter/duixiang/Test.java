@@ -13,7 +13,7 @@ public class Test {
         Object[] objects = new Object[]{"1","2"};
         //本身不具备排序，但是有了适配器，就具备了排序功能。
         Score score = new ScoreAdapter();
+        Score score2 = new ScoreAdapter(new Sort());
         Object[] sortObjects = score.sort(objects);
-        System.out.println(sortObjects);
     }
 }
