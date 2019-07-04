@@ -11,7 +11,7 @@ public class Sort {
 
     public Object[] quickSort(Object[] array){
         //进行排序处理,具体实现省略
-        System.out.println("开始排序了");
+        System.out.println("我现在具备排序功能了");
         //返回的是排好序的array
         return array;
     }
