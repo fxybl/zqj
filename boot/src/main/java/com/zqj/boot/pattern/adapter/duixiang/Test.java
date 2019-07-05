@@ -16,4 +16,11 @@ public class Test {
         Score score2 = new ScoreAdapter(new Sort());
         Object[] sortObjects = score.sort(objects);
     }
+
+    @org.junit.Test
+    public void fun2(){
+        Adaptee adaptee = new MyAdaptee();
+        Adapter adapter = new Adapter(adaptee);
+        adapter.request();
+    }
 }
