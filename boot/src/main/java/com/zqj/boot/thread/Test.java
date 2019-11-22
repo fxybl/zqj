@@ -21,4 +21,28 @@ public class Test {
         }
     }
 
+    @org.junit.Test
+    public void fun2() throws Exception{
+        Person p = new Person();
+        //抛出异常
+        p.wait();
+
+    }
+
+    @org.junit.Test
+    public void fun3(){
+        final Animal an = new Animal();
+        an.setAge(1);
+        an.setName("小狗");
+        System.out.println(an);
+    }
+
+    @org.junit.Test
+    public void fun4(){
+        System.out.println(15==0b1111);
+        System.out.println(14|0b0001);
+    }
+
+
+
 }
