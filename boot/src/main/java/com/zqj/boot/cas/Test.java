@@ -1,6 +1,7 @@
 package com.zqj.boot.cas;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author zqj
@@ -23,5 +24,13 @@ public class Test {
         System.out.println(atomicInteger.compareAndSet(5,50));
         //打印false,即修改失败，V和A值不等，新值B修改失败
         System.out.println(atomicInteger.compareAndSet(5,100));
+        AtomicReference<Integer> atomic = new AtomicReference<>(5);
+        //打印true,即修改成功,V和A的值相等，新值B修改成功
+        System.out.println(atomic.compareAndSet(5,50));
+        //打印false,即修改失败，V和A值不等，新值B修改失败
+        System.out.println(atomic.compareAndSet(5,100));
+
+
+
     }
 }
