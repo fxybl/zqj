@@ -19,7 +19,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
     //目前数组的大小
     private int threshold;
 
-    //扩容因子，越小，hash冲突越小。0.75最佳,当size > DEFAULT_INTI_CAPACITY * DEFAULT_LOAD_FACTOR 时进行扩容
+    //扩容因子，越小，hash冲突越小。0.75最佳,当size > threshold * DEFAULT_LOAD_FACTOR 时进行扩容
     private static final float DEFAULT_LOAD_FACTOR = 0.75f;
 
     public MyHashMap(int capacity){
@@ -40,7 +40,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
         if (table == null) {
             table = new Node[threshold];
         }
-        //当size > DEFAULT_INTI_CAPACITY * DEFAULT_LOAD_FACTOR时进行扩容
+        //当size > threshold * DEFAULT_LOAD_FACTOR时进行扩容
         if (size > threshold * DEFAULT_LOAD_FACTOR) {
             resize();
         }
