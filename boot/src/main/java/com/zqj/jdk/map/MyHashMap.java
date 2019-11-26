@@ -14,24 +14,38 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
     private int size;
 
     //默认初始化大小
-    private int DEFAULT_INTI_CAPACITY = 16;
+    private static final int DEFAULT_INTI_CAPACITY = 16;
+
+    //目前数组的大小
+    private int threshold;
 
     //扩容因子，越小，hash冲突越小。0.75最佳,当size > DEFAULT_INTI_CAPACITY * DEFAULT_LOAD_FACTOR 时进行扩容
     private static final float DEFAULT_LOAD_FACTOR = 0.75f;
+
+    public MyHashMap(int capacity){
+        if(capacity <= 0){
+            throw new IllegalArgumentException("初始化参数capacity无效");
+        }
+        this.threshold = capacity;
+    }
+
+    public MyHashMap(){
+        this(DEFAULT_INTI_CAPACITY);
+    }
 
 
     @Override
     public V put(K k, V v) {
         //如果map为空则初始化map
         if (table == null) {
-            table = new Node[DEFAULT_INTI_CAPACITY];
+            table = new Node[threshold];
         }
         //当size > DEFAULT_INTI_CAPACITY * DEFAULT_LOAD_FACTOR时进行扩容
-        if (size > DEFAULT_INTI_CAPACITY * DEFAULT_LOAD_FACTOR) {
+        if (size > threshold * DEFAULT_LOAD_FACTOR) {
             resize();
         }
         //计算出数组的下标
-        int index = getIndex(k, DEFAULT_INTI_CAPACITY);
+        int index = getIndex(k, threshold);
         //获取当前坐标的node
         Node<K, V> node = table[index];
         //为空新建一个node,同时size++
@@ -70,7 +84,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
     //数组重新扩容
     private void resize() {
         //之前的长度* 2
-        int newLength = DEFAULT_INTI_CAPACITY * 2;
+        int newLength = threshold * 2;
         //新建一个Node数组
         Node<K, V>[] newTable = new Node[newLength];
         //对老的table进行遍历，计算出老的key对应的新的table的角标，同时移入新的table,但是此方法会导致链表中的node元素倒置
@@ -95,7 +109,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
         //将新的table赋值
         table = newTable;
         //赋值新的数组长度
-        DEFAULT_INTI_CAPACITY = newLength;
+        threshold = newLength;
     }
 
     @Override
@@ -106,7 +120,7 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
     @Override
     public V get(K k) {
         //获取下标
-        int index = getIndex(k, DEFAULT_INTI_CAPACITY);
+        int index = getIndex(k, threshold);
         //获取对应下标的链头Node
         Node<K, V> node = table[index];
         //相等直接返回
