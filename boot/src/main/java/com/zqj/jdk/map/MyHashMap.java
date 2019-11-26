@@ -74,16 +74,16 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
         //新建一个Node数组
         Node<K, V>[] newTable = new Node[newLength];
         //对老的table进行遍历，计算出老的key对应的新的table的角标，同时移入新的table,但是此方法会导致链表中的node元素倒置
-        for(int i = 0; i < table.length ;i++){
-            Node<K,V> oldNode = table[i];
-            while (oldNode != null){
+        for (int i = 0; i < table.length; i++) {
+            Node<K, V> oldNode = table[i];
+            while (oldNode != null) {
                 //gc回收
                 table[i] = null;
                 K k = oldNode.getKey();
                 //新table对应的角标
-                int index = getIndex(k,newLength);
+                int index = getIndex(k, newLength);
                 //将旧table[i]的下一个Node赋值暂存
-                Node<K,V> nextNode = oldNode.getNextNode();
+                Node<K, V> nextNode = oldNode.getNextNode();
                 //初次newTable[index]为空，因此首个被移位的Node.next为空
                 oldNode.setNextNode(newTable[index]);
                 //将旧的table中的之前的角标移位到新的table中的新的角标
@@ -106,17 +106,17 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
     @Override
     public V get(K k) {
         //获取下标
-        int index = getIndex(k,DEFAULT_INTI_CAPACITY);
+        int index = getIndex(k, DEFAULT_INTI_CAPACITY);
         //获取对应下标的链头Node
-        Node<K,V> node = table[index];
+        Node<K, V> node = table[index];
         //相等直接返回
-        if(k==node.getKey() || k.equals(node.getKey())){
+        if (k == node.getKey() || k.equals(node.getKey())) {
             return node.getValue();
-        }else {
+        } else {
             //获取下一个，并进行遍历，如果相等，直接返回
-            Node<K,V> next = node.getNextNode();
-            while (next !=null){
-                if(k==next.getKey() || k.equals(next.getKey())){
+            Node<K, V> next = node.getNextNode();
+            while (next != null) {
+                if (k == next.getKey() || k.equals(next.getKey())) {
                     return next.getValue();
                 }
                 next = next.getNextNode();
@@ -155,11 +155,11 @@ public class MyHashMap<K, V> implements MyMap<K, V> {
             this.v = v;
         }
 
-        public  Node<K, V> getNextNode(){
+        public Node<K, V> getNextNode() {
             return this.next;
         }
 
-        public  void setNextNode(Node<K,V> next){
+        public void setNextNode(Node<K, V> next) {
             this.next = next;
         }
 
