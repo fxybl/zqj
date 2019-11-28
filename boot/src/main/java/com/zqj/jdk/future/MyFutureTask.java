@@ -83,10 +83,65 @@ public class MyFutureTask<V> implements Runnable {
     @Override
     public void run() {
         if(state !=NEW || !UNSAFE.compareAndSwapObject(this,runnerOffset,null,Thread.currentThread())){
-            //如果此时状态不是NEW,或者改变当前持有线程的时候失败，则直接返回。（因为new MyFutureTask()时会进行2个非原子性操作，1个改变state为NEW，一个改变持有的线程。）
+            //如果此时状态不是NEW,或者改变当前持有线程的时候失败，则直接返回。这样保证只有一个线程在执行此方法（因为会进行2个非原子性操作，1个new对象时改变state为NEW，一个run时改变持有的线程。）
             return;
         }
+        try{
+            //用另一个指针指向callable对象
+            MyCallable<V> callable = this.callable;
 
+            if(callable !=null && state ==NEW){
+                //运行结果
+                boolean ran;
+                V result;
+                try{
+                    result = callable.call();
+                    ran= true;
+
+                }catch (Exception e){
+                    result = null;
+                    ran = false;
+                    setException(e);
+                }
+                if(ran){
+                    set(result);
+                }
+            }
+
+        }finally {
+            //线程执行完则取消当前线程的绑定
+            runner = null;
+        }
+
+
+
+    }
+
+    //执行成功设置值
+    private void set(V result) {
+
+    }
+
+    //callable执行失败设置异常
+    private void setException(Exception e) {
+        //尝试改变state为completing
+        if(UNSAFE.compareAndSwapInt(this,stateOffset,NEW,COMPLETING)){
+            //改变成功后，设置结果
+            outcome = e;
+            //设置后，强制改变state为异常的状态
+            UNSAFE.putOrderedInt(this,stateOffset,EXCEPTIONAL);
+            //改变后唤醒通知get()时所有休眠的线程，通知他们已经有结果了
+            finishCompletion();
+        }
+    }
+
+    //完成之后唤醒那些休眠的线程去获取结果了
+    private void finishCompletion() {
+        //遍历waiters这个链状结构的等待队列;
+
+        for(WaiterNode w;(w=waiters)!=null ;){
+
+        }
 
     }
 
