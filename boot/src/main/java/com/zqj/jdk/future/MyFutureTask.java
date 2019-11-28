@@ -8,6 +8,8 @@ package com.zqj.jdk.future;
 
 import sun.misc.Unsafe;
 
+import java.util.concurrent.locks.LockSupport;
+
 /**
  * 执行的所有流程
  * NEW -> COMPLETING -> NORMAL
@@ -119,6 +121,15 @@ public class MyFutureTask<V> implements Runnable {
 
     //执行成功设置值
     private void set(V result) {
+        //this替换的对应的对象，stateOffset内存地址值,NEW原先值,COMPLETING期待替换后的值
+        if(UNSAFE.compareAndSwapInt(this,stateOffset,NEW,COMPLETING)){
+            //改变成功则设置结果
+            outcome = result;
+            //强制改变状态为正常完成
+            UNSAFE.putOrderedInt(this,stateOffset,NORMAL);
+            //唤醒
+            finishCompletion();
+        }
 
     }
 
@@ -137,12 +148,51 @@ public class MyFutureTask<V> implements Runnable {
 
     //完成之后唤醒那些休眠的线程去获取结果了
     private void finishCompletion() {
-        //遍历waiters这个链状结构的等待队列;
-
+        //遍历waiters这个链状结构的等待队列,依次唤醒，并清除掉。
+        //w指向waters对象，然后将waters置为空，如果失败，则继续循环，直到成功改变为空，停止循环。
         for(WaiterNode w;(w=waiters)!=null ;){
-
+            //使用cas将waters队列引用置空。
+            if(UNSAFE.compareAndSwapObject(this,waitersOffset,w,null)){
+                for( ; ;){
+                    //用t指向thread对象
+                    Thread t = w.thread;
+                    if(t!=null){
+                        //help gc
+                        w.thread = null;
+                        //唤醒此线程
+                        LockSupport.unpark(t);
+                    }
+                    //获取此节点的下一个等待中的节点
+                    WaiterNode n =w.next;
+                    if(n==null){
+                        //不存在下一个则停止循环
+                        break;
+                    }
+                    //help gc,断开w和next的连接，然后让w重新指向next,可以加速w之前指向的对象的垃圾回收速度。
+                    w.next = null;
+                    w=n;
+                }
+                //全部清理完成后停止最外面的循环
+                break;
+            }
         }
+        //钩子方法，留给子类实现
+        done();
+        //一个线程执行完成后，清空callable
+        callable = null;
 
+    }
+
+    //如果想在完成后执行一些自己的操作，只需重写此方法.
+    protected void done() {
+    }
+
+    public static void main(String[] args) {
+        //无限循环
+        for(int i;(i=3)>0;){
+            i--;
+            System.out.println(i);
+        }
     }
 
     //等待链表队列节点
