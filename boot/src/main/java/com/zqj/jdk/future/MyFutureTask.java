@@ -8,6 +8,8 @@ package com.zqj.jdk.future;
 
 import sun.misc.Unsafe;
 
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.LockSupport;
@@ -130,7 +132,7 @@ public class MyFutureTask<V> implements Runnable {
     }
 
     //获取结果，超时，任然没数据，则抛出超时异常
-    public V get(long timeout, TimeUnit unit) throws TimeoutException,InterruptedException {
+    public V get(long timeout, TimeUnit unit) throws TimeoutException,InterruptedException, ExecutionException {
         if(unit ==null){
             throw new NullPointerException();
         }
@@ -142,7 +144,17 @@ public class MyFutureTask<V> implements Runnable {
         return  report(s);
     }
 
-    private V report(int s) {
+    private V report(int s) throws ExecutionException{
+        Object object = outcome;
+        //正常状态直接返回
+        if(s ==NORMAL){
+            return (V)object;
+        }
+        //放弃之后的都为手动取消
+        if(s >= CANCLED){
+            throw new CancellationException();
+        }
+        //剩下一个异常EXCEPTIONAL状态
         return null;
     }
 
