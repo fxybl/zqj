@@ -8,6 +8,8 @@ package com.zqj.jdk.future;
 
 import sun.misc.Unsafe;
 
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -114,9 +116,92 @@ public class MyFutureTask<V> implements Runnable {
             //线程执行完则取消当前线程的绑定
             runner = null;
         }
+    }
 
+    //获取结果
+    public V get() throws Exception{
+        int s = state;
+        //任务在进行中，则睡眠线程,等待被唤醒
+        if(state <= COMPLETING){
+            //不超时返回，
+            s=awaitDone(false,0L);
+        }
+        return report(s);
+    }
 
+    //获取结果，超时，任然没数据，则抛出超时异常
+    public V get(long timeout, TimeUnit unit) throws TimeoutException,InterruptedException {
+        if(unit ==null){
+            throw new NullPointerException();
+        }
+        int s = state;
+        //如果awaitDone()执行了后，超时返回的结果还是小于等于COMPLETING,则抛出超时异常。
+        if(s  <= COMPLETING && (s =awaitDone(true,unit.toNanos(timeout))) <=COMPLETING){
+            throw new TimeoutException();
+        }
+        return  report(s);
+    }
 
+    private V report(int s) {
+        return null;
+    }
+
+    private int awaitDone(boolean timed, long nanos) throws InterruptedException {
+        //超时的时间，如果设置超时返回,timed为true,则计算当前时间加上超时的时候之后的时间点。否则为0;
+        final long deadline = timed ? System.nanoTime()+nanos : 0L;
+        //定义一个node
+        WaiterNode node =null;
+        boolean queued = false;
+        //自旋
+        for( ; ;){
+           //首先响应中断
+            //此方法会判断此线程是否被中断，并且会清除中断状态
+            if(Thread.interrupted()){
+                //被中断移除此节点，node为空不会被处理
+                removeWaiter(node);
+                throw new InterruptedException();
+            }
+            int s = state;
+            //此时状态大于COMPLETING则表示已经处理完成,可以直接返回状态
+            if(s >COMPLETING){
+                return s;
+            }else if(s ==COMPLETING){
+                //此时刚好是COMPLETING,则表示任务可能即将被完成，设置线程的优先级为低，释放执行权，让其他线程先执行
+                Thread.yield();
+            }
+            //剩下的就是状态是NEW的任务了
+            //初次进来node是为空的
+            else if(node ==null){
+                node = new WaiterNode();
+            }else if(!queued){
+                //初次!queued必为true，此时通过cas将waters改为自己定义的新的WaiterNode node(也就是将新的等待队列置于waiters链表的头部),同时将node的下一个节点指向之前的老的waiters，如果更新失败，下次进来继续更新
+                //更新前 oldHeadWaiterNode -->WaiterNode -->oldTrail
+                //更新后  newHeadWaiterNode -->oldHeadWaiterNode -->WaiterNode -->oldTrail
+                queued = UNSAFE.compareAndSwapObject(this,waitersOffset,node.next = waiters,node);
+            }else if(timed){
+                //设置了超时返回
+                //用设置的时间期限减去当前时间，如果小于等于0则表示已经超时，应该返回值了，否则睡眠线程
+                 nanos = deadline -System.nanoTime();
+                 if(nanos<=0L){
+                     //在等待waiters中移除当前节点
+                     removeWaiter(node);
+                     return state;
+                 }else {
+                     //睡眠线程
+                     LockSupport.park(this);
+                 }
+            }else {
+                //未设置超时返回,直接睡眠线程
+                LockSupport.park(this);
+            }
+
+        }
+    }
+
+    private void removeWaiter(WaiterNode node) {
+        if(node !=null){
+
+        }
     }
 
     //执行成功设置值
@@ -168,8 +253,9 @@ public class MyFutureTask<V> implements Runnable {
                         //不存在下一个则停止循环
                         break;
                     }
-                    //在两种情形下，可能会将某变量显式设为 null 。
                     //对于成员变量
+                    //在两种情形下，可能会将某变量显式设为 null 。
+                    //
                     //它是某个长生存期对象的成员，并且再也不会被该对象使用，而且比较大，在这种时候，将其设为 null 是一种优化。
                     //它是某个长生存期对象的成员，并且再也不会被该对象使用，并且已经被 dispose 了以释放其占用的资源。这里将其设为 null 是一种安全的做法，因为确定某人误用了一个 null 对象比确定某人误用了一个已被 dispose 的对象更容易些。
                     //help gc,断开w和next的连接，然后让w重新指向next,可以加速w之前指向的对象的垃圾回收速度。
@@ -207,8 +293,8 @@ public class MyFutureTask<V> implements Runnable {
         private volatile WaiterNode next;
 
 
-        WaiterNode(Thread thread) {
-            this.thread = thread;
+        WaiterNode() {
+            this.thread = Thread.currentThread();
         }
     }
 }
