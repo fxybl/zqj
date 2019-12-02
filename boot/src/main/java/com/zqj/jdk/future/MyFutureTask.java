@@ -265,8 +265,36 @@ public class MyFutureTask<V> implements Runnable {
     //从waiters中移除制定的节点
     private void removeWaiter(WaiterNode node) {
         if (node != null) {
-            //将需要移除的node的Thread置空，以区分
+            //将需要移除的node的thread置空，以区分
             node.thread = null;
+            //轮询
+            retry:
+            for (; ; ) {
+                for (WaiterNode pred = null, q = waiters, s; q != null; q = s) {
+                    //node --> node --> node -->node
+                    //pred --> q --> s
+                    //q初始化为当前的waiters，每次pred暂存q的值，然后q指向下一个node(q.next);
+                    s = q.next;
+                    if (q.thread != null) {
+                        //初次进来，是waiter的链表头部，如果不为空
+                        //将q此时的值赋值到pred上面
+                        pred = q;
+                    } else if (pred != null) {
+                        //进来此分支一般是第一个if判断到了需要取消的节点(q.thread ==null)，然后此步骤将需要取消的节点，的上一个节点，不再指向本身，而指向下一个
+                        pred.next = s;
+                        if (pred.thread == null) {
+                            //如果此时pred的线程被置空了，说明此节点也被纳入了取消，则重新遍历
+                            continue retry;
+                        }
+                    } else if (!UNSAFE.compareAndSwapObject(this, waitersOffset, q, s)) {
+                        //进入此分支的条件是，第一次循环时，q.thread==null便满足，也就是waiter的链表表头就是要取消的节点，则cas更新waters由q变为他的下一个s
+                        //更新失败重试
+                        continue retry;
+                    }
+                }
+                //正常遍历完，则停止轮询
+                break;
+            }
 
         }
     }
