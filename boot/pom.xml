@@ -47,6 +47,11 @@
             <artifactId>java-sdk</artifactId>
             <version>4.12.0</version>
         </dependency>
+        <!--springboot热编译插件，同时在Compiler中将Make project automatically开启-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
