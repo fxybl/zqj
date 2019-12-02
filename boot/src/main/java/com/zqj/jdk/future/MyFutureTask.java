@@ -86,6 +86,34 @@ public class MyFutureTask<V> implements Runnable {
         this.state = NEW;
     }
 
+    //放弃任务，（isInterrupt为true，表示中断方式放弃，为false表示直接放弃）
+    public boolean cancel(boolean isInterrupt) {
+        //状态为NEW,然后cas将state替换为INTERRUPTING或CANCELD失败时直接返回cancel失败
+        if (!(state == NEW && UNSAFE.compareAndSwapInt(this, stateOffset, NEW, isInterrupt ? INTERRUPTING : CANCLED))) {
+            return false;
+        }
+        try {
+            if (isInterrupt) {
+                //如果是中断方式放弃
+                try {
+                    //获取当前执行中的线程
+                    Thread t = runner;
+                    if (t != null) {
+                        //中断线程
+                        t.interrupt();
+                    }
+                } finally {
+                    //将状态强制替换为已中断
+                    UNSAFE.putOrderedInt(this, stateOffset, INTERUPTED);
+                }
+            }
+        } finally {
+            //中断后唤醒等待的线程
+            finishCompletion();
+        }
+        return true;
+    }
+
     @Override
     public void run() {
         if (state != NEW || !UNSAFE.compareAndSwapObject(this, runnerOffset, null, Thread.currentThread())) {
@@ -117,7 +145,31 @@ public class MyFutureTask<V> implements Runnable {
         } finally {
             //线程执行完则取消当前线程的绑定
             runner = null;
+            int s = state;
+            //如果状态是中断中,让出线程执行权
+            if (s == INTERRUPTING) {
+                handPossibleInterrupt(s);
+            }
         }
+    }
+
+    private void handPossibleInterrupt(int s) {
+        if (s == INTERRUPTING) {
+            while (s == INTERRUPTING) {
+                //等待cancel方法执行完成，将INTERRUPTING改为INTERRUPTED，暂时放出本线程的执行权，让其他线程优先执行
+                Thread.yield();
+            }
+        }
+    }
+
+    //是否放弃
+    public boolean isCancel() {
+        return state >= CANCLED;
+    }
+
+    //是否完成
+    public boolean isComplete() {
+        return state != NEW;
     }
 
     //获取结果
@@ -210,8 +262,11 @@ public class MyFutureTask<V> implements Runnable {
         }
     }
 
+    //从waiters中移除制定的节点
     private void removeWaiter(WaiterNode node) {
         if (node != null) {
+            //将需要移除的node的Thread置空，以区分
+            node.thread = null;
 
         }
     }
