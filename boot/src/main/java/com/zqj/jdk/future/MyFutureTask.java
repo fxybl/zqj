@@ -372,14 +372,6 @@ public class MyFutureTask<V> implements Runnable {
     protected void done() {
     }
 
-    public static void main(String[] args) {
-        //无限循环
-        for (int i; (i = 3) > 0; ) {
-            i--;
-            System.out.println(i);
-        }
-    }
-
     //等待链表队列节点
     static final class WaiterNode {
         //等待的线程
