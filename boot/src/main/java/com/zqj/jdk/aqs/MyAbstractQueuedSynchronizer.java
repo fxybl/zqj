@@ -255,6 +255,7 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
         return false;
     }
 
+    //放弃获取锁
     private void cancelAcquire(Node node) {
         if(node == null){
             return;
