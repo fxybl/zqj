@@ -63,7 +63,7 @@ public class MyFutureTask<V> implements Runnable {
 
     static {
         try {
-            //底层UNSAFE
+            //底层UNSAFE,需要修改，此方式获取会报错，需要使用反射去获取此实例
             UNSAFE = Unsafe.getUnsafe();
             Class<?> clazz = MyFutureTask.class;
             //获取变量的内存地址,以使用cas操作,保持原子性操作
