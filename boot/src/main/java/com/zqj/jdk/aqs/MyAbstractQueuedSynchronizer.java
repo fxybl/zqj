@@ -256,6 +256,10 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
     }
 
     private void cancelAcquire(Node node) {
+        if(node == null){
+            return;
+        }
+        node.thread = null;
     }
 
     //添加到等待队列中
