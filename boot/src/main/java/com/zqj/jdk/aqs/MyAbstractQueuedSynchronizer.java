@@ -158,7 +158,7 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
     }
 
     //cas替换node的下一个等待结点
-    protected final boolean compareAndSwapNext(Node node, int expect, int update) {
+    protected final boolean compareAndSwapNext(Node node, Node expect, Node update) {
         return unsafe.compareAndSwapObject(node, nextOffset, expect, update);
     }
 
@@ -178,7 +178,19 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
             //中断线程
             selfInterrupt();
         }
+    }
 
+    //释放锁，unlock()方法会调用此方法
+    public final boolean release(int args){
+        if(tryRelease(args)){
+            Node h = head;
+            //head waitStatus为0说明没有后继节点在等待,不需要唤醒
+            if(h !=null && h.waitStatus !=0){
+                unparkSuccessor(h);
+            }
+            return true;
+        }
+        return false;
     }
 
 
@@ -233,34 +245,97 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
         //获取上一个节点的状态
         int status = pred.waitStatus;
         //如果前面的节点设置为了SIGNAL状态，那么等他结束后会唤醒下一个节点,那么此节点就可以安心的睡眠了
-        if(status ==Node.SIGNAL){
+        if (status == Node.SIGNAL) {
             return true;
         }
         //>0只有放弃状态，CANCELED,从pred开始，像前遍历，直到找到一个不是>0的节点，然后将此节点指向node
-        if(status > 0 ){
+        if (status > 0) {
             do {
                 //pred = pred.prev，将pred赋值为他的上一个节点，因为老的pred放弃了
                 //node.prev = pred，
                 //直到找到一个不是  CANCELED状态的节点
                 node.prev = pred = pred.prev;
-            }while (pred.waitStatus >0);
+            } while (pred.waitStatus > 0);
 
             //找到了,此时返回false,说明不要进行休眠，继续上一个方法acquireQueued（）的轮询
             pred.next = node;
-        }else {
+        } else {
             //状态为0,即初始状态，或者为PROPAGATE(为啥不为CONDITION?待看了Condition再来分析)
             //将状态设置为SIGNAL,不管成功与否，都返回false,重新走一遍acquireQueued（）的轮询...如果设置成功，则会进入本方法第一个if,返回true。
-            compareAndSwapWaitStatus(pred,status,Node.SIGNAL);
+            compareAndSwapWaitStatus(pred, status, Node.SIGNAL);
         }
         return false;
     }
 
     //放弃获取锁
     private void cancelAcquire(Node node) {
-        if(node == null){
+        if (node == null) {
             return;
         }
+        //先将node线程占有设置为空，也方便之后的判断，为空就是取消的节点
         node.thread = null;
+        //轮询获取node的上一个不为放弃的节点（至于一个要放弃的节点node，它的prev为啥还要指向pred???）
+        Node pred = node.prev;
+        while (pred.waitStatus > 0) {
+            node.prev = pred = pred.prev;
+        }
+
+        //node的上一个不为放弃的节点，它的next
+        Node predNext = pred.next;
+
+        //将node的waitStatus改为CANCELED,以便其他的线程进来时第一时间知道这个节点放弃了
+        node.waitStatus = Node.CANCELED;
+
+        //如果node为尾节点，则直接将pred设置为新的尾节点，同时将pred的下一个节点设置为空
+        if (node == tail && compareAndSwapTail(node, pred)) {
+            compareAndSwapNext(pred, node, null);
+        } else {
+            //如果不是尾节点，也不是头节点，并且状态是SIGNAL(不是SIGNAL,但是要<=0并且设置为SIGNAL要成功),同时pred的持有thread不能为空,
+            int ws;
+            if (pred != head && ((ws = pred.waitStatus) == Node.SIGNAL || (ws <= 0 && compareAndSwapWaitStatus(pred, ws, Node.SIGNAL)))) {
+                //获取node.next，要求不为空同时不能为放弃，则将pred.next指向node.next
+                Node next = node.next;
+                if (next != null && next.waitStatus <= 0) {
+                    //至于什么时候将next.prev指向pred,是靠其他线程来完成。
+                    compareAndSwapNext(pred, predNext, next);
+                }
+
+            } else {
+                //如果是头节点的话,唤醒node的下一个节点。
+                unparkSuccessor(node);
+            }
+            //help gc
+            node.next = node;
+        }
+    }
+
+    //唤醒下一个节点, 从调用者看出，此node就是head节点
+    private void unparkSuccessor(Node node) {
+        int ws = node.waitStatus;
+        //如果小于0，则设置为0
+        if (ws < 0) {
+            compareAndSwapWaitStatus(node, ws, 0);
+        }
+        //获取node的下一个节点
+        Node s = node.next;
+        //如果下一个节点为空或者为放弃状态,则从尾节点遍历，一直遍历到离node最近的一个有效节点进行唤醒，期间清除掉被取消的节点
+        if (s == null || s.waitStatus > 0) {
+            //如果为CANCELED状态也将s设置为空
+            s = null;
+            //初始化t = tail尾节点,终止循环的条件：t是null或者t是node本尊。每次将t赋值为t.prev上一个节点
+            for (Node t = tail; t != null && t != node; t = t.prev) {
+                //每次都将满足条件的t赋值给s
+                if (t.waitStatus <= 0) {
+                    s = t;
+                }
+            }
+            //找到最近的一个s，如果一个条件都不满足，则不唤醒任何线程
+            if (s != null) {
+                LockSupport.unpark(s.thread);
+            }
+        }
+
+
     }
 
     //添加到等待队列中
@@ -318,6 +393,7 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
 
     //中断自己
     private void selfInterrupt() {
+        Thread.currentThread().interrupt();
     }
 
 
