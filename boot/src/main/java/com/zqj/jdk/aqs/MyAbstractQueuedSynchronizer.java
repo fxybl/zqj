@@ -117,6 +117,10 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
             this.thread = thread;
             this.waitStatus = waitStatus;
         }
+
+        public boolean isShared(){
+            return this.nextWaiter == SHARED;
+        }
     }
 
     //头结点（链表不包含头结点，头结点相当于当前持有锁的节点）
@@ -136,6 +140,7 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
     protected final void setState(int state) {
         this.state = state;
     }
+
 
     //cas,期望值，更新值
     protected final boolean compareAndSwapState(int expect, int update) {
