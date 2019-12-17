@@ -3,6 +3,7 @@ package com.zqj.jdk.aqs;
 import sun.misc.Unsafe;
 
 import java.io.Serializable;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -416,6 +417,43 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
         //3：如果排队的首节点就是本节点，则返回false
         return h != t && ((s = h.next) == null || s.thread !=Thread.currentThread());
     }
+
+    public class MyConditionObject implements MyCondition,Serializable{
+
+        private static final long serialVersionUID = 1173984872572414690L;
+
+        //transient不进行序列化
+        private transient Node firstWaiter;
+
+        private transient Node lastWaiter;
+
+        @Override
+        public void await() throws InterruptedException {
+
+        }
+
+        @Override
+        public void await(long time, TimeUnit unit) throws InterruptedException {
+
+        }
+
+        @Override
+        public void awaitUninterruptibly() {
+
+        }
+
+        @Override
+        public void signal() throws InterruptedException {
+
+        }
+
+        @Override
+        public void signalAll() throws InterruptedException {
+
+        }
+    }
+
+
 
 
 }

@@ -10,6 +10,18 @@ public class MyReentrantLock implements Serializable {
 
     private static final long serialVersionUID = 7373984972572414698L;
 
+    private final Sync sync;
+
+    public MyReentrantLock(){
+        //默认非公平锁
+        sync = new NonfairSync();
+    }
+
+    //fair 是否公平锁
+    public MyReentrantLock(boolean fair){
+        sync = fair ? new FairSync() : new NonfairSync();
+    }
+
     abstract static class Sync extends MyAbstractQueuedSynchronizer {
 
         private static final long serialVersionUID = 7373984972572414688L;
@@ -39,6 +51,7 @@ public class MyReentrantLock implements Serializable {
 
         //将非公平锁的获取操作放在sync中,公平锁的单独写在对应的子类FairSync
         protected boolean nonfairTryAcquire(int args) {
+            //和公平锁的唯一区别就是不用去看是否有节点在等待,而直接去获取锁
             //获取当前线程
             final Thread current = Thread.currentThread();
             //获取状态
