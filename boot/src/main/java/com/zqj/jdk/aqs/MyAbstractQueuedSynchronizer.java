@@ -401,5 +401,21 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
         Thread.currentThread().interrupt();
     }
 
+    //当前节点的前面是否有节点在排队
+    protected final boolean hasQueuePred() {
+        Node h = head;
+        Node t = tail;
+        Node s;
+        //1：头等于尾返回false，因为只有未初始化时头才会等会尾，都为空,此时没有队列
+        //2：如果头不等于尾，那么肯定有队列,获取头的下一个节点,如果为空，直接返回true（此时另一个节点正在进行初始化操作,方法enq(Node node)中,）
+        //if (compareAndSwapTail(pred, node)) {
+        //                    pred.next = node;
+        //                    return node;
+        //                }
+        //此时刚好把node换成尾tail,但是还没来得及将pred也就是head的下一个节点指向node，所以导致head.next为空。但是其实已经有另一个节点正在入队了.
+        //3：如果排队的首节点就是本节点，则返回false
+        return h != t && ((s = h.next) == null || s.thread !=Thread.currentThread());
+    }
+
 
 }
