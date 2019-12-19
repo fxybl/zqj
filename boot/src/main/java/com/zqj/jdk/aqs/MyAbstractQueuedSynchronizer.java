@@ -119,7 +119,7 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
             this.waitStatus = waitStatus;
         }
 
-        public boolean isShared(){
+        public boolean isShared() {
             return this.nextWaiter == SHARED;
         }
     }
@@ -187,11 +187,11 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
     }
 
     //释放锁，unlock()方法会调用此方法
-    public final boolean release(int args){
-        if(tryRelease(args)){
+    public final boolean release(int args) {
+        if (tryRelease(args)) {
             Node h = head;
             //head waitStatus为0说明没有后继节点在等待,不需要唤醒
-            if(h !=null && h.waitStatus !=0){
+            if (h != null && h.waitStatus != 0) {
                 unparkSuccessor(h);
             }
             return true;
@@ -415,10 +415,62 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
         //                }
         //此时刚好把node换成尾tail,但是还没来得及将pred也就是head的下一个节点指向node，所以导致head.next为空。但是其实已经有另一个节点正在入队了.
         //3：如果排队的首节点就是本节点，则返回false
-        return h != t && ((s = h.next) == null || s.thread !=Thread.currentThread());
+        return h != t && ((s = h.next) == null || s.thread != Thread.currentThread());
     }
 
-    public class MyConditionObject implements MyCondition,Serializable{
+    private int fullRelease(Node node) {
+        //获取当前持有锁的state
+        int state = getState();
+        boolean fail = true;
+        try {
+            if (tryRelease(state)) {
+                //释放锁成功
+                fail = false;
+                return state;
+            } else {
+                throw new IllegalMonitorStateException();
+            }
+        } finally {
+            if (fail) {
+                //无效监视器异常，就会进入此分支,即当前线程不是锁的持有者
+                node.waitStatus = Node.CANCELED;
+            }
+        }
+    }
+
+    //是否在同步队列中
+    private boolean isOnSyncQueue(Node node) {
+        //signal唤醒的时候会将状态设置为0，如果还是CONDITION，则不再同步队列中
+        //同步队列是双向链表，condition队列是单向队列，pre前置节点为空，说明还是在condition队列中
+        if (node.waitStatus == Node.CONDITION || node.prev == null) {
+            return false;
+        }
+        //节点入队的时候，会首先cas将当前节点的prev指向尾节点，如果成功，再讲尾节点指向自己，如果node的next都有了，肯定在同步队列中了
+        if (node.next != null) {
+            return true;
+        }
+        //从同步队列中查找该节点是否在同步队列中
+        return findNodeFromTail(node);
+    }
+
+    //从同步队列中查找该节点是否在同步队列中
+    private boolean findNodeFromTail(Node node) {
+        Node t = tail;
+        //从尾结点开始，轮询遍历
+        for (; ; ) {
+            if (t == node) {
+                return true;
+            }
+            if (t == null) {
+                return false;
+            }
+            //对比上一个
+            t = t.prev;
+
+        }
+    }
+
+    public class MyConditionObject implements MyCondition, Serializable {
 
         private static final long serialVersionUID = 1173984872572414690L;
 
@@ -427,10 +479,172 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
 
         private transient Node lastWaiter;
 
+        //响应中断
         @Override
         public void await() throws InterruptedException {
+            //因为持有锁才能调用，所以不存在线程安全问题
+            //如果被中断了，直接抛出中断异常,同时清除中断标记
+            if (Thread.interrupted()) {
+                throw new InterruptedException();
+            }
+            Node node = addConditionWaiter();
+            //全部释放锁
+            int savaState = fullRelease(node);
+            //
+            int interuptMode = 0;
+            //退出循环的条件，1个是当前节点在同步队列中了，另外一种是线程在睡眠途中被中断了
+            while (!isOnSyncQueue(node)) {
+                //如果不在同步队列中，则睡眠线程
+                LockSupport.park(this);
+                if ((interuptMode = checkInteruptWhileWaiting(node)) != 0) {
+                    //如果在线程睡眠期间被中断了，则停止循环,否则继续判断是否在同步队列中,直到被放到同步队列中
+                    break;
+                }
+            }
+            //在同步队列中了，以及重新中断的状态都会入队(解答了之前的why???)，尝试从同步队列中获取锁
+            if (acquireQueued(node, savaState) && interuptMode != THROW_IE) {
+                //醒了后从同步队列中获取锁，此方法会返回线程的中断状态,
+                interuptMode = REINTERRUPT;
+            }
+            if (node.nextWaiter != null) {
+                //signal的时候会将node的nextWaiter置空断开连接，此时为空（signal之后）
+                //signal之前中断，只入队，没有将nextWaiter置空，此时扫描需要放弃的节点
+                //有节点放弃就需要执行此方法
+                unlinkCancelledWaiters();
+            }
+
+            if (interuptMode != 0) {
+                reportInteruptAfterWait(interuptMode);
+            }
+
 
         }
+
+        //await()其他的都执行后，处理THROW_IE和REINTERRUPT2种状态
+        private void reportInteruptAfterWait(int interuptMode) throws InterruptedException {
+            if (interuptMode == THROW_IE) {
+                throw new InterruptedException();
+            } else if (interuptMode == REINTERRUPT) {
+                //重新中断自己
+                selfInterrupt();
+            }
+        }
+
+        //在signal之后中断的，则需要重新中断，
+        private static final int REINTERRUPT = 1;
+        //在signal之前中断的，则直接抛出异常
+        private static final int THROW_IE = -1;
+
+        //等待的时间检测中断的状态
+        private int checkInteruptWhileWaiting(Node node) {
+            //如果没有中断， 返回0
+            //节点被中断分2种情况，一种在signal之前，一种在signal唤醒之后，，，signal唤醒之前则直接抛出中断异常，唤醒之后则重新中断
+            return Thread.interrupted() ? (transferAfterCancelledWait(node) ? THROW_IE : REINTERRUPT) : 0;
+        }
+
+        private boolean transferAfterCancelledWait(Node node) {
+            if (compareAndSwapWaitStatus(node, Node.CONDITION, 0)) {
+                //如果替换成功，则代表是在signal之前就中断了，因为signal会将此节点状态改为0
+                //中断之后依然会转移到阻塞队列（why???）
+                enq(node);
+                return true;
+            }
+            while (!isOnSyncQueue(node)) {
+                //此时已经被signal方法给放进同步队列的途中了，则暂时释放出执行权，等待放成功
+                Thread.yield();
+            }
+            return false;
+        }
+
+
+        //添加到condition队列中
+        private Node addConditionWaiter() {
+            Node t = lastWaiter;
+            if (t != null && t.waitStatus != Node.CONDITION) {
+                //尾节点放弃了，触发清理
+                unlinkCancelledWaiters();
+                //将t指向新的尾节点
+                t = lastWaiter;
+            }
+            Node node = new Node(Thread.currentThread(), Node.CONDITION);
+            if (firstWaiter == null) {
+                //目前队列为空，则fistWaiter为node
+                firstWaiter = node;
+            } else {
+                //将尾节点lastWaiter的下一个指向node
+                t.nextWaiter = node;
+            }
+            //新的尾节点
+            lastWaiter = node;
+            return node;
+        }
+
+        //清理被放弃的节点
+        private void unlinkCancelledWaiters() {
+            //例子:
+            //firstWaiter                                               lastWaiter
+            //  Node1    -->  Node2   -->   Node3    -->      Node4  -->Node5
+            //Cancel           Cancel      Condition       Cancel        Condition
+            //首先Node1为firstWaiter，然后t为Node1,
+
+            //第一次循环
+            //next为Node1.next 即Node2
+            //Node1为Cancel，所以应该放弃掉,
+            //将Node1的nextWaiter置空
+            //此节点为放弃，所以不设置trail
+            //设置firstWaiter为next，即Node2
+            //最后设置t = Node2，开始判断Node2
+
+            //第二次循环
+            //next为Node3
+            //Node2也就是此时的t也为Cancel，所以也应该放弃掉
+            //trail仍然为空，首节点firstWaiter为Node3
+            //赋值t为Node3
+
+            //第3次循环
+            //因为Node3为CONDITION，所以此时赋值有效的Node3为trail
+
+            //第4次循环
+            //Node4为Cancel，trail为Node3
+            //将trail.nextWaiter = Node5
+
+            //第5次循环，
+            //最后一个为Condition，所以lastWaiter保持不变，
+            //如果不为Condition，则lastWaiter = trail;即将最后一个有效的trail赋值为lastWaiter
+
+
+            //从首节点开始向后扫描，直到没有
+            Node t = firstWaiter;
+            //  //轨迹节点，用于暂时保存上一个有效的节点
+            Node trail = null;
+            while (t != null) {
+                //获取下一个节点
+                Node next = t.nextWaiter;
+                //不为CONDITION状态的都应该取消
+                if (t.waitStatus != Node.CONDITION) {
+                    //将指向下一个节点置空
+                    t.nextWaiter = null;
+                    if (trail == null) {
+                        //轨迹一直为空，只有从头节点开始，后面的节点都属于要被取消的，则会进入此分支
+                        firstWaiter = next;
+                    } else {
+                        //将轨迹（上一个有效的节点）指向下一个
+                        trail.nextWaiter = next;
+                    }
+                    if (next == null) {
+                        lastWaiter = trail;
+                    }
+
+                } else {
+                    //如果此节点不应取消，即为CONDITION，则将此node暂存
+                    trail = t;
+                }
+                //循环判断，此时对next进行判断
+                t = next;
+            }
+
+        }
+
 
         @Override
         public void await(long time, TimeUnit unit) throws InterruptedException {
@@ -452,8 +666,6 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
 
         }
     }
-
-
 
 
 }
