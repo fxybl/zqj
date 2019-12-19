@@ -655,7 +655,7 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
         public boolean await(long time, TimeUnit unit) throws InterruptedException {
             //转换成纳秒
             long nanosTimeout = unit.toNanos(time);
-            if(Thread.interrupted()){
+            if (Thread.interrupted()) {
                 throw new InterruptedException();
             }
             //添加节点
@@ -663,20 +663,23 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
             //释放锁
             int saveState = fullRelease(node);
             //此时开始计算过期的时间点
-            final long deadline = System.nanoTime()+ nanosTimeout;
-            //默认是正常返回，不是超时返回
+            final long deadline = System.nanoTime() + nanosTimeout;
+            //(待写)
+            //todo
             boolean timedout = false;
             int interuptMode = 0;
             //退出循环的条件，1个是当前节点在同步队列中了，另外一种是线程在睡眠途中被中断了
             while (!isOnSyncQueue(node)) {
-                if(nanosTimeout <=0L){
+                if (nanosTimeout <= 0L) {
                     //如果超时时间设置的0，则不需要睡眠线程
+                    //待写
+                    //todo
                     timedout = transferAfterCancelledWait(node);
                     break;
                 }
                 //如果小于这个阈值，不睡眠线程
-                if(nanosTimeout >= spinForTimeoutThreshold){
-                    LockSupport.parkNanos(this,nanosTimeout);
+                if (nanosTimeout >= spinForTimeoutThreshold) {
+                    LockSupport.parkNanos(this, nanosTimeout);
                 }
 
                 if ((interuptMode = checkInteruptWhileWaiting(node)) != 0) {
@@ -684,7 +687,7 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
                     break;
                 }
                 //获取剩余的时间
-                nanosTimeout = System.nanoTime() -deadline;
+                nanosTimeout = System.nanoTime() - deadline;
             }
             //在同步队列中了，以及重新中断的状态都会入队(解答了之前的why???)，尝试从同步队列中获取锁
             if (acquireQueued(node, saveState) && interuptMode != THROW_IE) {
