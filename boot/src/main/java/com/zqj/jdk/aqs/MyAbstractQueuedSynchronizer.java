@@ -542,6 +542,7 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
             return Thread.interrupted() ? (transferAfterCancelledWait(node) ? THROW_IE : REINTERRUPT) : 0;
         }
 
+        //转移
         private boolean transferAfterCancelledWait(Node node) {
             if (compareAndSwapWaitStatus(node, Node.CONDITION, 0)) {
                 //如果替换成功，则代表是在signal之前就中断了，因为signal会将此节点状态改为0
