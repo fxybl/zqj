@@ -19,5 +19,5 @@ public interface MyCondition {
     void awaitUninterruptibly();
 
     //超时取消等待
-    void await(long time, TimeUnit unit)throws InterruptedException;
+    boolean await(long time, TimeUnit unit)throws InterruptedException;
 }

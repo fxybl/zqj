@@ -4,6 +4,7 @@ import sun.misc.Unsafe;
 
 import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -133,6 +134,8 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
 
     //根据需求不同，意义不同，一般为0时，没有线程持有锁，大于0有线程持有锁
     private volatile int state;
+
+    static final long spinForTimeoutThreshold = 1000L;
 
     protected final int getState() {
         return state;
@@ -647,25 +650,168 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
         }
 
 
+        //超时直接返回
         @Override
-        public void await(long time, TimeUnit unit) throws InterruptedException {
+        public boolean await(long time, TimeUnit unit) throws InterruptedException {
+            //转换成纳秒
+            long nanosTimeout = unit.toNanos(time);
+            if(Thread.interrupted()){
+                throw new InterruptedException();
+            }
+            //添加节点
+            Node node = addConditionWaiter();
+            //释放锁
+            int saveState = fullRelease(node);
+            //此时开始计算过期的时间点
+            final long deadline = System.nanoTime()+ nanosTimeout;
+            //默认是正常返回，不是超时返回
+            boolean timedout = false;
+            int interuptMode = 0;
+            //退出循环的条件，1个是当前节点在同步队列中了，另外一种是线程在睡眠途中被中断了
+            while (!isOnSyncQueue(node)) {
+                if(nanosTimeout <=0L){
+                    //如果超时时间设置的0，则不需要睡眠线程
+                    timedout = transferAfterCancelledWait(node);
+                    break;
+                }
+                //如果小于这个阈值，不睡眠线程
+                if(nanosTimeout >= spinForTimeoutThreshold){
+                    LockSupport.parkNanos(this,nanosTimeout);
+                }
 
+                if ((interuptMode = checkInteruptWhileWaiting(node)) != 0) {
+                    //如果在线程睡眠期间被中断了，则停止循环,否则继续判断是否在同步队列中,直到被放到同步队列中
+                    break;
+                }
+                //获取剩余的时间
+                nanosTimeout = System.nanoTime() -deadline;
+            }
+            //在同步队列中了，以及重新中断的状态都会入队(解答了之前的why???)，尝试从同步队列中获取锁
+            if (acquireQueued(node, saveState) && interuptMode != THROW_IE) {
+                //醒了后从同步队列中获取锁，此方法会返回线程的中断状态,
+                interuptMode = REINTERRUPT;
+            }
+            if (node.nextWaiter != null) {
+                //signal的时候会将node的nextWaiter置空断开连接，此时为空（signal之后）
+                //signal之前中断，只入队，没有将nextWaiter置空，此时扫描需要放弃的节点
+                //有节点放弃就需要执行此方法
+                unlinkCancelledWaiters();
+            }
+
+            if (interuptMode != 0) {
+                reportInteruptAfterWait(interuptMode);
+            }
+
+            return !timedout;
         }
 
+        //最后响应中断,但不抛出中断异常
         @Override
         public void awaitUninterruptibly() {
+            //添加节点
+            Node node = addConditionWaiter();
+            //释放锁
+            int savedState = fullRelease(node);
+            boolean interrupted = false;
+            while (!isOnSyncQueue(node)) {
+                //不在同步队列中，就睡眠此线程
+                LockSupport.park(this);
+                //醒来后优先判断中断状态
+                if (Thread.interrupted())
+                    interrupted = true;
+            }
+            //尝试获取锁，会返回中断状态
+            //或者interrupted = true;
+            if (acquireQueued(node, savedState) || interrupted) {
+                //中断
+                selfInterrupt();
+            }
 
         }
 
         @Override
-        public void signal() throws InterruptedException {
-
+        public void signal() {
+            if (!isHeldExclusively()) {
+                //不持有锁，则直接抛出无效监视器异常
+                throw new IllegalMonitorStateException();
+            }
+            Node first = firstWaiter;
+            if (first != null) {
+                //唤醒头节点
+                doSignal(first);
+            }
         }
+
 
         @Override
-        public void signalAll() throws InterruptedException {
+        public void signalAll() {
+            if (!isHeldExclusively()) {
+                //不持有锁，则直接抛出无效监视器异常
+                throw new IllegalMonitorStateException();
+            }
+            Node first = firstWaiter;
+            if (first != null) {
+                //唤醒头节点
+                doSignalAll(first);
+            }
+        }
+
+        //唤醒所有
+        private void doSignalAll(Node first) {
+            //因为唤醒了所有，所有首尾都置空
+            firstWaiter = lastWaiter = null;
+            do {
+                //暂存下一个轮询的节点
+                Node next = first.nextWaiter;
+                //清空，断链
+                first.nextWaiter = null;
+                //唤醒
+                transferForSignal(first);
+                //重新赋值,已轮询下一个
+                first = next;
+            } while (first != null);
+        }
+
+        private void doSignal(Node first) {
+            do {
+                //唤醒了头节点first，那么此时的头就是first.nextWaiter
+                //如果他的下一个节点是空，那么说明就一个节点在队列，同时将lastWaiter清空
+                if ((firstWaiter = first.nextWaiter) == null) {
+                    lastWaiter = null;
+                }
+                //将被唤醒的头节点的nextWaiter置空
+                first.nextWaiter = null;
+                //唤醒并转移头节点,如果成功，结束。。。。
+                //如果失败,将需要唤醒的节点改为下一个，不为空继续轮询
+            } while (!transferForSignal(first) && (first = firstWaiter) != null);
 
         }
+
+        private boolean transferForSignal(Node node) {
+            if (!compareAndSwapWaitStatus(node, Node.CONDITION, 0)) {
+                //被中断了，此时node的waitStatus就不为CONDITION了，此时那边会为THROW_IE状态
+                return false;
+            }
+            //入队,返回的是node入队后的前驱节点prev
+            Node p = enq(node);
+            //获取此时的状态
+            int s = p.waitStatus;
+            //如果前驱节点已经放弃了。直接唤醒node
+            //将node.prev状态cas变为SIGNAL，以便他释放锁时唤醒自己
+            //如果设置成功，则不需要唤醒此node,交由他的prev来唤醒。
+            //如果设置失败，需要唤醒node
+            if (s > 0 || !compareAndSwapWaitStatus(p, s, Node.SIGNAL)) {
+                LockSupport.unpark(node.thread);
+            }
+            //都返回true
+            return true;
+        }
+    }
+
+
+    //独占锁和共享锁的实现方式不同
+    private boolean isHeldExclusively() {
+        throw new UnsupportedOperationException("需要子类实现此方法");
     }
 
 
