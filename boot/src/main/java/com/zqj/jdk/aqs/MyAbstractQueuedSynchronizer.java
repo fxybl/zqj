@@ -4,7 +4,6 @@ import sun.misc.Unsafe;
 
 import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -53,6 +52,28 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
         } catch (Exception e) {
             throw new Error(e);
         }
+    }
+
+    //获取共享锁（响应中断）
+    public void acquireSharedInterupt(int args) throws InterruptedException {
+        if(Thread.interrupted()){
+            throw new InterruptedException();
+        }
+        //对于共享锁，获取锁返回值小于0代表未能获取，大于等于0能获取锁
+        //比如CountLatch,await()方法执行的时候，如果获取到锁，直接执行完成，否则入队等待。
+        //await()方法会调用此acquireSharedInterupt（args)
+        if(tryAcquireShared(args) < 0){
+            //todo
+            doAcquireSharedInterupt(args);
+        }
+    }
+
+    private void doAcquireSharedInterupt(int args) {
+
+    }
+
+    protected int tryAcquireShared(int args) {
+        throw new UnsupportedOperationException("需要子类实现");
     }
 
 
