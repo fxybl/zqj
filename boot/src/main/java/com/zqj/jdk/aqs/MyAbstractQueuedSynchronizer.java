@@ -63,12 +63,49 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
         //比如CountLatch,await()方法执行的时候，如果获取到锁，直接执行完成，否则入队等待。
         //await()方法会调用此acquireSharedInterupt（args)
         if(tryAcquireShared(args) < 0){
-            //todo
+            //没获取到锁，入队等待
             doAcquireSharedInterupt(args);
         }
     }
 
+    //没有获取到锁，入队等待
     private void doAcquireSharedInterupt(int args) {
+        //以共享模式入队
+        final Node node = addWaiter(Node.SHARED);
+        //默认是失败的
+        boolean fail = true;
+        try{
+            //默认未中断
+            boolean interrupted = false;
+            //轮询
+            for( ; ;){
+                //获取上一个节点
+                final Node pred = node.prev;
+                if(pred ==head){
+                    //上一个是头节点，尝试再试获取锁
+                    int r = tryAcquireShared(args);
+                    if(r >=0){
+                        //获取到了锁
+                        //CountDownLatch获取到锁是返回1
+                        //Propagate是state的最后一种状态， 共享模式使用
+                        setHeadAndPropagate(node,r);
+
+                    }
+                }
+
+
+            }
+
+        }finally {
+            if(fail){
+                cancelAcquire(node);
+            }
+        }
+
+    }
+
+    //Propagate是state的最后一种状态， 共享模式使用
+    private void setHeadAndPropagate(Node node, int r) {
 
     }
 
