@@ -106,6 +106,9 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
 
     //Propagate是state的最后一种状态， 共享模式使用
     private void setHeadAndPropagate(Node node, int r) {
+        //获取老头,设置新头
+        Node h = head;
+        setHead(node);
 
     }
 
