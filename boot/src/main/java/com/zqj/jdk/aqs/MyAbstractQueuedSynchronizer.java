@@ -161,7 +161,7 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
         //当前节点的线程
         private Thread thread;
 
-        //condition中使用的
+        //condition中使用的，同步队列中使用时，用于区别共享模式跟独享模式
         private Node nextWaiter;
 
         //新建Node的时候使用
