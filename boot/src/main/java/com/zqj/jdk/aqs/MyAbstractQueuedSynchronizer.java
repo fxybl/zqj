@@ -56,13 +56,13 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
 
     //获取共享锁（响应中断）
     public void acquireSharedInterupt(int args) throws InterruptedException {
-        if(Thread.interrupted()){
+        if (Thread.interrupted()) {
             throw new InterruptedException();
         }
         //对于共享锁，获取锁返回值小于0代表未能获取，大于等于0能获取锁
         //比如CountLatch,await()方法执行的时候，如果获取到锁，直接执行完成，否则入队等待。
         //await()方法会调用此acquireSharedInterupt（args)
-        if(tryAcquireShared(args) < 0){
+        if (tryAcquireShared(args) < 0) {
             //没获取到锁，入队等待
             doAcquireSharedInterupt(args);
         }
@@ -74,21 +74,23 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
         final Node node = addWaiter(Node.SHARED);
         //默认是失败的
         boolean fail = true;
-        try{
+        try {
             //默认未中断
             boolean interrupted = false;
             //轮询
-            for( ; ;){
+            for (; ; ) {
                 //获取上一个节点
                 final Node pred = node.prev;
-                if(pred ==head){
+                if (pred == head) {
                     //上一个是头节点，尝试再试获取锁
                     int r = tryAcquireShared(args);
-                    if(r >=0){
+                    if (r >= 0) {
                         //获取到了锁
+                        // =0代表获取锁成功，但是后续节点不可以在获取锁了
+                        // >0代表后续节点可以再次进行获取锁
                         //CountDownLatch获取到锁是返回1
                         //Propagate是state的最后一种状态， 共享模式使用
-                        setHeadAndPropagate(node,r);
+                        setHeadAndPropagate(node, r);
 
                     }
                 }
@@ -96,8 +98,8 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
 
             }
 
-        }finally {
-            if(fail){
+        } finally {
+            if (fail) {
                 cancelAcquire(node);
             }
         }
@@ -105,11 +107,56 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
     }
 
     //Propagate是state的最后一种状态， 共享模式使用
-    private void setHeadAndPropagate(Node node, int r) {
+    private void setHeadAndPropagate(Node node, int propagate) {
         //获取老头,设置新头
         Node h = head;
         setHead(node);
 
+        if (propagate > 0 || h == null || h.waitStatus < 0 || (h = head) == null || h.waitStatus < 0) {
+            // propagate >0 才可以让其他人来获取锁,
+            //新头和老头都是空(没有等待队列的时候头是空的)
+            //新头和老头的状态都是非最初状态和非放弃状态
+            Node s = node.next;
+            if (s != null || s.isShared()) {
+                //有下一个等着，则并且是共享锁，唤醒下一个
+                doReleaseShared();
+            }
+
+        }
+
+
+    }
+
+
+    //共享模块使用的释放锁的方法--唤醒继任者(successor)以及确定propagation状态
+    //（注意：对于独占模块，释放锁仅仅等同于去唤醒需要唤醒的头结点这个继任者）
+    private void doReleaseShared() {
+        for (; ; ) {
+            Node h = head;
+            //头为空的时候，没有等待队列
+            //头等于尾的时候还正在初始化中
+            //2者都不需要进行唤醒
+            if (h != null && h != tail) {
+                int ws = h.waitStatus;
+                //正常状态下（此时头不为空），头节点会被他的下一个等待节点设置为SIGNAL
+                if (ws == Node.SIGNAL) {
+                    //第一次进来，就会进入此分支，然后把状态设置为0
+                    if (!compareAndSwapWaitStatus(h, ws, 0)) {
+                        //更新失败，重新轮询
+                        continue;
+                    }
+                    //更新成功,唤醒之
+                    unparkSuccessor(h);
+                } else if (ws == 0 && !compareAndSwapWaitStatus(h, 0, Node.PROPAGATE)) {
+                    //设置为0失败后（比如被其他节点抢先设置了），将头的状态设置为PROPAGATE，代表其他节点都可以获取锁，设置失败重新轮询
+                    continue;
+                }
+            }
+            //如果此期间头没有变过，则结束循环，否则，继续
+            if (h == head) {
+                break;
+            }
+        }
     }
 
     protected int tryAcquireShared(int args) {
