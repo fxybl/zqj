@@ -94,8 +94,6 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
 
                     }
                 }
-
-
             }
 
         } finally {
@@ -121,10 +119,7 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
                 //有下一个等着，则并且是共享锁，唤醒下一个
                 doReleaseShared();
             }
-
         }
-
-
     }
 
 
@@ -160,6 +155,19 @@ public abstract class MyAbstractQueuedSynchronizer implements Serializable {
     }
 
     protected int tryAcquireShared(int args) {
+        throw new UnsupportedOperationException("需要子类实现");
+    }
+
+    public boolean releaseShared(int args) {
+        if(tryReleaseShared(args)){
+            //释放全部共享锁返回true，则唤醒其他节点
+            doReleaseShared();
+            return true;
+        }
+        return false;
+    }
+
+    protected boolean tryReleaseShared(int args){
         throw new UnsupportedOperationException("需要子类实现");
     }
 

@@ -23,6 +23,7 @@ public class MyCountDownLatch {
             return getState() == 0 ? 1 : -1;
         }
 
+        @Override
         protected boolean tryReleaseShared(int args){
             for( ; ;){
                 int state = getState();
@@ -52,6 +53,10 @@ public class MyCountDownLatch {
     public void await()throws InterruptedException{
         //获取共享锁（响应中断）
         sync.acquireSharedInterupt(1);
+    }
+
+    public void countDown(){
+        sync.releaseShared(1);
     }
 
 
