@@ -25,8 +25,13 @@ public class TokenUtil {
 
     //校验token是否合法
     public static boolean checkToken(String token){
-        Claims claims = Jwts.parser().setSigningKey(publicKey).parseClaimsJws(token).getBody();
-        String sub = claims.get("sub", String.class);
-        return true;
+        try{
+            Claims claims = Jwts.parser().setSigningKey(publicKey).parseClaimsJws(token).getBody();
+            String sub = claims.get("sub", String.class);
+            return true;
+        }catch (Exception e){
+            return false;
+        }
+
     }
 }
