@@ -15,7 +15,7 @@ public final class MyExecutors {
     }
 
     /**
-     * 无参方法，默认10个核心线程，最大500个线程，无限队列，不做任何处理的拒绝策略
+     * 无参方法，默认10个核心线程，最大500个线程，无界队列，不做任何处理的拒绝策略
      * @return
      */
     public static ThreadPoolExecutor getThreadPoolExcutor(){
