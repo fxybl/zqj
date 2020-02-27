@@ -1,5 +1,5 @@
 # boot
-1.JDK的源码AQS（并发包的基石），Condition,ReentrantLock（可重入锁）,Semaphore,FutureTask（获取异步任务的结果）,HashMap自己的分析。  
+1.JDK的源码AQS（并发包的基石），Condition, ReentrantLock（可重入锁）, Semaphore, FutureTask（获取异步任务的结果）, HashMap自己的分析。  
 https://github.com/fxybl/zqj/tree/master/boot/src/main/java/com/zqj/jdk  
 
 2.一些常见的设计模式的DEMO  
