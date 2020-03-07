@@ -12,6 +12,9 @@ https://github.com/fxybl/zqj/tree/master/boot/src/main/java/com/zqj/boot/nio
 4.自定义线程池工厂  
 https://github.com/fxybl/zqj/tree/master/boot/src/main/java/com/zqj/boot/thread_pool  
 
+5.Elasticsearch的一些简单的使用demo  
+https://github.com/fxybl/zqj/tree/master/boot/src/main/java/com/zqj/boot/es  
+
 # global-exception
 全局异常的统一处理，给予友好提示，包括对于@NotNull等判断注解的异常处理。  
 https://github.com/fxybl/zqj/tree/master/global-exception   
