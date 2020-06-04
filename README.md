@@ -6,6 +6,7 @@ https://github.com/fxybl/zqj/tree/master/boot/src/main/java/com/zqj/jdk
 https://github.com/fxybl/zqj/tree/master/boot/src/main/java/com/zqj/boot/pattern  
 
 3.NIO(异步IO)以及netty（基于NIO）的简单DEMO   
+https://github.com/fxybl/zqj/tree/master/boot/src/main/java/com/zqj/boot/netty2 
 https://github.com/fxybl/zqj/tree/master/boot/src/main/java/com/zqj/boot/netty  
 https://github.com/fxybl/zqj/tree/master/boot/src/main/java/com/zqj/boot/nio  
 
